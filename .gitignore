@@ -1,0 +1,6 @@
+node_modules
+client/build/*
+electron/src/build
+!client/build/index.html
+server/dist/*
+!server/dist/server/index.html

@@ -1,0 +1,18 @@
+UR: Seven black and 7 white pieces
+        XxX
+      ^ xxx ^
+      | xxx |
+      s xOx s
+         x
+         x
+        XxX
+        xxx
+
+s=start
+X=roll again
+O=roll again and also safe
+
+Roll 4d4 (actually d2)
+Must Move a piece of your choice forward or onto the board
+If you land on an opponent, that piece is reset
+Win by getting all your pieces around the board

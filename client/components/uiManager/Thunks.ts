@@ -28,39 +28,6 @@ export const onUpdateNPCs = (npcs:Array<PlayerState>) => {
     })
 }
 
-export const onPlacedTile = () => {
-    dispatch({
-        type: UIReducerActions.PLACED_TILE
-    })
-}
-
-export const onUpdateResources = (resources: any) => {
-    dispatch({
-        type: UIReducerActions.UPDATE_RESOURCE,
-        resources
-    })
-}
-
-export const onUpdateFoodGain = (food:number) => {
-    dispatch({
-        type: UIReducerActions.UPDATE_FOOD_GAIN,
-        food
-    })
-}
-
-export const onTick = () => {
-    dispatch({
-        type: UIReducerActions.TICK
-    })
-}
-
-export const onUpdateHammerGain = (hammers:number) => {
-    dispatch({
-        type: UIReducerActions.UPDATE_HAMMER_GAIN,
-        hammers
-    })
-}
-
 export const onLose = () => {
     dispatch({
         type: UIReducerActions.LOSE
@@ -73,15 +40,31 @@ export const onWin = () => {
     })
 }
 
-export const onHideModal = () => {
+export const onUpdateSelectedPiece = (piece:Piece) => {
     dispatch({
-        type: UIReducerActions.HIDE_MODAL,
+        type: UIReducerActions.UPDATE_SELECTED,
+        piece
     })
 }
 
-export const onToggleCreativeMode = () => {
+export const onUpdateActivePlayer = (playerId:string, roll:number) => {
     dispatch({
-        type: UIReducerActions.TOGGLE_CREATE,
+        type: UIReducerActions.UPDATE_ACTIVE,
+        playerId,
+        roll
+    })
+}
+
+export const onUpdatePlayer = (player:PlayerState) => {
+    dispatch({
+        type: UIReducerActions.UPDATE_PLAYER,
+        player
+    })
+}
+
+export const onHideModal = () => {
+    dispatch({
+        type: UIReducerActions.HIDE_MODAL,
     })
 }
 

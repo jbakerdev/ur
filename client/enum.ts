@@ -7,12 +7,10 @@ export enum UIReducerActions {
     UPDATE_NPCS='uplay',
     LOSE= 'loose',
     WIN='win',
-    PLACED_TILE='ptil',
-    UPDATE_RESOURCE='urss',
-    UPDATE_HAMMER_GAIN='uhgs',
-    UPDATE_FOOD_GAIN='ufgz',
-    TOGGLE_CREATE='tglcr',
-    RESET='reset'
+    RESET='reset',
+    UPDATE_SELECTED='uslel',
+    UPDATE_ACTIVE='uact',
+    UPDATE_PLAYER='upl'
 }
 
 export const StaticLayers = [

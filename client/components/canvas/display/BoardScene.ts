@@ -2,7 +2,7 @@ import { Scene, GameObjects, Tilemaps, Geom } from "phaser";
 import { store } from "../../../App";
 import { defaults, Sprites } from '../../../assets/Assets'
 import { Modal, UIReducerActions, StaticLayers } from "../../../enum";
-import { onLose, onWin, onUpdateNPCs, onPlacedTile, onUpdateResources, onUpdateFoodGain, onUpdateHammerGain } from "../../uiManager/Thunks"
+import { onLose, onWin, onUpdateSelectedPiece, onUpdateActivePlayer, onUpdatePlayer } from "../../uiManager/Thunks"
 
 const TILE_WIDTH = 16
 const IMMUNITY_STEP = 8
@@ -17,6 +17,8 @@ export default class BoardScene extends Scene {
     map:Tilemaps.Tilemap
     tileLayer: Tilemaps.StaticTilemapLayer
     messages: Array<GameObjects.Text>
+    playerStart: Tilemaps.Tile
+    cpuStart: Tilemaps.Tile
 
     constructor(config){
         super(config)
@@ -59,6 +61,9 @@ export default class BoardScene extends Scene {
         
         this.map.createStaticLayer('board', tileset)
         this.tileLayer = this.map.createStaticLayer('tiles', tileset)
+
+        this.playerStart = this.tileLayer.getTileAt(4,2)
+        this.cpuStart = this.tileLayer.getTileAt(4,0)
         
         this.setSelectIconPosition(this.selectedTile)
         
@@ -78,7 +83,7 @@ export default class BoardScene extends Scene {
             let state = store.getState()
             if(state.human.id === state.activePlayerId){
                 this.moveHumanPiece(state.selectedPiece, state.currentRoll)
-                onEndHumanTurn()
+                onUpdateActivePlayer(state.cpu.id, Phaser.Math.Between(0,4))
                 this.runAITurn()
             }
         })
@@ -87,7 +92,7 @@ export default class BoardScene extends Scene {
 
     runAITurn = () => {
         let state = store.getState()
-        let aiRoll = Phaser.Math.Between(0,4)
+        let aiRoll = state.currentRoll
         //Find threatened player pieces and move threatening piece
         let threatPiece = state.cpu.pieces.find(p=>state.human.pieces.findIndex(h=>h.step === p.step+aiRoll && h.step !== IMMUNITY_STEP)!==-1)
         if(threatPiece) this.collideAIPiece(threatPiece, aiRoll)
@@ -99,23 +104,24 @@ export default class BoardScene extends Scene {
                     validMove = this.tryMoveAIPiece(p, aiRoll)
             })
         }
-        if(state.cpu.pieces.filter(p=>p.step === state.cpu.path.length-1).length === state.cpu.pieces.length) {
+        if(state.cpu.pieces.length === 0) {
             onLose()
             return
         }
-        onStartHumanTurn(state.human.id, Phaser.Math.Between(0,4))
+        onUpdateActivePlayer(state.human.id, Phaser.Math.Between(0,4))
     }
 
     getPlayerPieceTile = (index:number) => {
         let state = store.getState()
         let selectedIndex = state.human.pieces.findIndex(p=>p.id === state.selectedPiece.id)
-        let newPiece = state.human.pieces.filter(p=>p.step < state.human.path.length-1)[(selectedIndex+index)%state.human.pieces.length]
+        let newPiece = state.human.pieces[(selectedIndex+index)%state.human.pieces.length]
         onUpdateSelectedPiece(newPiece)
         return this.tileLayer.getTileAt(state.human.path[newPiece.step].tileX, state.human.path[newPiece.step].tileY)
     }
 
     collideAIPiece = (piece:Piece, amount:number) => {
-        let collisionPiece = store.getState().human.pieces.find(p=>p.step === piece.step+amount)
+        let human = store.getState().human
+        let collisionPiece = human.pieces.find(p=>p.step === piece.step+amount)
         collisionPiece.step=0
         let startingTile = this.playerStart
         this.tweens.add({
@@ -124,8 +130,13 @@ export default class BoardScene extends Scene {
             y: startingTile.getCenterY(),
             duration: 500
         })
-        onUpdatePiece(collisionPiece)
+        human.pieces = human.pieces.map(p=>{
+            if(p.id === collisionPiece.id) return collisionPiece
+            return p
+        })
+        onUpdatePlayer(human)
         this.movePiece(piece, amount)
+        
     }
 
     tryMoveAIPiece = (piece:Piece, amount:number) => {
@@ -136,14 +147,47 @@ export default class BoardScene extends Scene {
         return true
     }
 
+    getScoringTileForPiece = (piece:Piece) => {
+        //Find how many pieces are already scored
+        //Put it at scoring tileX + already scored peices
+    }
+
     movePiece = (piece:Piece, amount:number) => {
-        let targetTile = this.getLandingTileForPiece(piece)
+        let targetTile = this.getLandingTileForPiece(piece, amount)
         let pieceSpr = this.pieceSprites.find(p=>p.name === piece.id)
         piece.step+=amount
-        if(piece.step > store.getState().human.path.length-1){
-            //score piece
-            onScorePiece(piece)
+        if(piece.step === store.getState().human.path.length-1){
+            let isHuman = store.getState().human.pieces.find(p=>p.id === piece.id)
+            if(isHuman){
+                let human = store.getState().human
+                human.pieces = human.pieces.filter(p=>p.id!==piece.id)
+                onUpdatePlayer(human)
+            }
+            else {
+                let cpu = store.getState().cpu
+                cpu.pieces = cpu.pieces.filter(p=>p.id!==piece.id)
+                onUpdatePlayer(cpu)
+            }
             targetTile = this.getScoringTileForPiece(piece)
+        }
+        else {
+            let isHuman = store.getState().human.pieces.find(p=>p.id === piece.id)
+            if(isHuman){
+                let human = store.getState().human
+                human.pieces = human.pieces.map(p=>{
+                    if(p.id === piece.id) return piece
+                    else return p
+                })
+                onUpdatePlayer(human)
+            }
+            else {
+                let cpu = store.getState().cpu
+                cpu.pieces = cpu.pieces.map(p=>{
+                    if(p.id === piece.id) return piece
+                    else return p
+                })
+                onUpdatePlayer(cpu)
+            }
         }
         this.tweens.add({
             targets:pieceSpr, 
@@ -151,7 +195,6 @@ export default class BoardScene extends Scene {
             y: targetTile.getCenterY(),
             duration: 500,
         })
-        onUpdatePiece(piece)
     }
 
     moveHumanPiece = (piece:Piece, amount:number) => {
@@ -160,14 +203,18 @@ export default class BoardScene extends Scene {
         let collisionPiece = enemy.pieces.find(p=>p.step === piece.step+amount)
         if(collisionPiece && collisionPiece.step !== IMMUNITY_STEP){
             collisionPiece.step=0
-            let startingTile = this.aiStart
+            let startingTile = this.cpuStart
             this.tweens.add({
                 targets: collisionPiece,
                 x: startingTile.getCenterX(),
                 y: startingTile.getCenterY(),
                 duration: 500
             })
-            onUpdatePiece(collisionPiece)
+            enemy.pieces = enemy.pieces.map(p=>{
+                if(p.id === collisionPiece.id) return collisionPiece
+                return p
+            })
+            onUpdatePlayer(enemy)
         }
         let state = store.getState()
         if(collisionPiece && (collisionPiece.step === IMMUNITY_STEP || piece.step+amount > state.human.path.length-1)) {
@@ -183,15 +230,15 @@ export default class BoardScene extends Scene {
             return
         }
         this.movePiece(piece, amount)
-        if(state.human.pieces.filter(p=>p.step === state.human.path.length-1).length === state.human.pieces.length) {
+        if(state.human.pieces.length === 0) {
             onWin()
         }
     }
 
-    getLandingTileForPiece = (peice:Piece) => {
+    getLandingTileForPiece = (peice:Piece, amount:number) => {
         let state = store.getState()
-        let tuple = state.human.path[peice.step+state.currentRoll]
-        return this.tileLayer.getTileAt(tuple.tileX, tuple.tileY)
+        let tuple = state.human.path[peice.step+amount]
+        if(tuple) return this.tileLayer.getTileAt(tuple.tileX, tuple.tileY)
     }
 
     setSelectIconPosition(targetTile:Tilemaps.Tile){

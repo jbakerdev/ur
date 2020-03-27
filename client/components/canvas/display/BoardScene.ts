@@ -77,11 +77,7 @@ export default class BoardScene extends Scene {
         this.input.keyboard.on('keydown-SPACE', (event) => {
             let state = store.getState()
             if(state.human.id === state.activePlayerId){
-                this.movePiece(state.selectedPiece, state.currentRoll, false)
-                if(state.human.pieces.filter(p=>p.step > state.human.path.length-1).length === state.human.pieces.length) {
-                    onWin()
-                    return
-                }
+                this.moveHumanPiece(state.selectedPiece, state.currentRoll)
                 onEndHumanTurn()
                 this.runAITurn()
             }
@@ -93,13 +89,17 @@ export default class BoardScene extends Scene {
         let state = store.getState()
         let aiRoll = Phaser.Math.Between(0,4)
         //Find threatened player pieces and move threatening piece
-        let threatPiece = state.cpu.pieces.find(p=>state.human.pieces.findIndex(h=>h.step === p.step+aiRoll)!==-1)
-        if(threatPiece) this.movePiece(threatPiece, aiRoll, true)
+        let threatPiece = state.cpu.pieces.find(p=>state.human.pieces.findIndex(h=>h.step === p.step+aiRoll && h.step !== IMMUNITY_STEP)!==-1)
+        if(threatPiece) this.collideAIPiece(threatPiece, aiRoll)
         else {
-            let furthest = state.cpu.pieces.sort((p1,p2)=>p1.step-p2.step)[0]
-            this.movePiece(furthest, aiRoll, true)
+            let furthest = state.cpu.pieces.sort((p1,p2)=>p1.step-p2.step)
+            let validMove = false
+            furthest.forEach(p=>{
+                if(!validMove)
+                    validMove = this.tryMoveAIPiece(p, aiRoll)
+            })
         }
-        if(state.cpu.pieces.filter(p=>p.step > state.cpu.path.length-1).length === state.cpu.pieces.length) {
+        if(state.cpu.pieces.filter(p=>p.step === state.cpu.path.length-1).length === state.cpu.pieces.length) {
             onLose()
             return
         }
@@ -114,14 +114,53 @@ export default class BoardScene extends Scene {
         return this.tileLayer.getTileAt(state.human.path[newPiece.step].tileX, state.human.path[newPiece.step].tileY)
     }
 
-    movePiece = (piece:Piece, amount:number, aiMove:boolean) => {
+    collideAIPiece = (piece:Piece, amount:number) => {
+        let collisionPiece = store.getState().human.pieces.find(p=>p.step === piece.step+amount)
+        collisionPiece.step=0
+        let startingTile = this.playerStart
+        this.tweens.add({
+            targets: collisionPiece,
+            x: startingTile.getCenterX(),
+            y: startingTile.getCenterY(),
+            duration: 500
+        })
+        onUpdatePiece(collisionPiece)
+        this.movePiece(piece, amount)
+    }
+
+    tryMoveAIPiece = (piece:Piece, amount:number) => {
+        if(piece.step+amount > store.getState().human.path.length-1){
+            return false
+        }
+        this.movePiece(piece, amount)
+        return true
+    }
+
+    movePiece = (piece:Piece, amount:number) => {
         let targetTile = this.getLandingTileForPiece(piece)
         let pieceSpr = this.pieceSprites.find(p=>p.name === piece.id)
-        let enemy = aiMove ? store.getState().human : store.getState().cpu
+        piece.step+=amount
+        if(piece.step > store.getState().human.path.length-1){
+            //score piece
+            onScorePiece(piece)
+            targetTile = this.getScoringTileForPiece(piece)
+        }
+        this.tweens.add({
+            targets:pieceSpr, 
+            x: targetTile.getCenterX(),
+            y: targetTile.getCenterY(),
+            duration: 500,
+        })
+        onUpdatePiece(piece)
+    }
+
+    moveHumanPiece = (piece:Piece, amount:number) => {
+        let pieceSpr = this.pieceSprites.find(p=>p.name === piece.id)
+        let enemy = store.getState().cpu
         let collisionPiece = enemy.pieces.find(p=>p.step === piece.step+amount)
         if(collisionPiece && collisionPiece.step !== IMMUNITY_STEP){
             collisionPiece.step=0
-            let startingTile = enemy.isAI ? this.aiStart : this.playerStart
+            let startingTile = this.aiStart
             this.tweens.add({
                 targets: collisionPiece,
                 x: startingTile.getCenterX(),
@@ -130,7 +169,8 @@ export default class BoardScene extends Scene {
             })
             onUpdatePiece(collisionPiece)
         }
-        if(collisionPiece && collisionPiece.step === IMMUNITY_STEP) {
+        let state = store.getState()
+        if(collisionPiece && (collisionPiece.step === IMMUNITY_STEP || piece.step+amount > state.human.path.length-1)) {
             this.sounds.error.play()
             this.tweens.add({
                 targets:pieceSpr, 
@@ -142,19 +182,10 @@ export default class BoardScene extends Scene {
             })
             return
         }
-        piece.step+=amount
-        if(piece.step > enemy.path.length-1){
-            //score piece
-            this.scorePiece(piece)
-            return
+        this.movePiece(piece, amount)
+        if(state.human.pieces.filter(p=>p.step === state.human.path.length-1).length === state.human.pieces.length) {
+            onWin()
         }
-        this.tweens.add({
-            targets:pieceSpr, 
-            x: targetTile.getCenterX(),
-            y: targetTile.getCenterY(),
-            duration: 500,
-        })
-        onUpdatePiece(piece)
     }
 
     getLandingTileForPiece = (peice:Piece) => {
